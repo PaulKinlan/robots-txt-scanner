@@ -10,9 +10,10 @@
 ## What Works
 
 - **Domain List Download (`download-list` command):** Status: Fully Implemented. Fetches the zip, extracts the CSV, cleans up.
-- **Domain Scanning (`scan` command):** Status: Fully Implemented. Reads CSV, uses `p-queue` for concurrency, fetches `robots.txt` (HTTPS/HTTP), performs basic text parsing for blocked agents, stores results in DB.
-- **Database Management (`db_manager.js`):** Status: Fully Implemented. Initializes SQLite DB, creates schema (`sites`, `blocked_agents` tables, index), handles insertions via transactions, provides query function, handles DB closing.
+- **URL Scanning (`scan` command):** Status: Fully Implemented. Reads CSV (format: `rank,url`), uses `p-queue` for concurrency, constructs `/robots.txt` path from URL origin, fetches `robots.txt`, performs basic text parsing for blocked agents, stores results (robots.txt URL, rank) in DB. Includes `--max-rank` option to filter input list.
+- **Database Management (`db_manager.js`):** Status: Fully Implemented. Initializes SQLite DB, creates schema (`sites` table with `url` (for robots.txt) and `rank` column, `blocked_agents` table, index), handles insertions via transactions (including storing rank on initial site insert), provides query functions, handles DB closing.
 - **Blocked Agent Query (`query --report blocked-agents` command):** Status: Fully Implemented. Queries the database using `GROUP BY`/`COUNT(*)` and displays the results.
+- **Sites with No Blocked Agents Query (`query --report no-blocked-agents` command):** Status: Fully Implemented. Queries the database using a `LEFT JOIN` and `COUNT` to find sites with no entries in `blocked_agents`.
 - **Database Reset (`reset-db` command):** Status: Fully Implemented. Drops tables and re-initializes the schema.
 - **CLI Structure (`index.js` / `yargs`):** Status: Fully Implemented. Defines commands, options, help text.
 
@@ -20,7 +21,7 @@
 
 - **Automated Tests:** Priority: High. No tests exist to verify functionality or prevent regressions.
 - **More Sophisticated `robots.txt` Parsing:** Priority: Medium/Low (depending on goals). The current text parsing is basic. Using `robots-parser` library fully could allow for more accurate rule interpretation (Allow, path specificity, wildcards).
-- **Advanced Querying/Reporting:** Priority: Medium. Only one report (`blocked-agents`) exists. Could add reports on sites without robots.txt, specific agent blocking patterns, etc.
+- **Further Advanced Querying/Reporting:** Priority: Medium. Two reports now exist (`blocked-agents`, `no-blocked-agents`). Could add more complex reports (e.g., sites without robots.txt, specific agent blocking patterns across site categories if categories were added).
 - **Configuration File:** Priority: Low. Settings like `CONCURRENCY`, `REQUEST_TIMEOUT`, `USER_AGENT`, DB path are hardcoded. Could move to a config file.
 - **Input Validation:** Priority: Medium. More robust validation could be added (e.g., checking CSV format more thoroughly).
 - **User Confirmation for `reset-db`:** Priority: Medium. Currently just logs a warning; should have an interactive prompt. (TODO noted in `index.js`).

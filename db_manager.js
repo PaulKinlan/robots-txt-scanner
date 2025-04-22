@@ -32,10 +32,27 @@ export function initDb() {
     db.exec(`
             CREATE TABLE IF NOT EXISTS sites (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT UNIQUE NOT NULL
+                url TEXT UNIQUE NOT NULL,
+                rank INTEGER -- Added rank column
             );
         `);
     console.log("Checked/created 'sites' table.");
+
+    // --- Add 'rank' column to 'sites' if it doesn't exist (Schema Migration) ---
+    try {
+      const columns = db.pragma("table_info(sites)");
+      const rankColumnExists = columns.some((col) => col.name === "rank");
+      if (!rankColumnExists) {
+        console.log("Attempting to add 'rank' column to 'sites' table...");
+        db.exec("ALTER TABLE sites ADD COLUMN rank INTEGER");
+        console.log("'rank' column added successfully.");
+      }
+    } catch (migrationError) {
+      console.error("Failed to migrate 'sites' table schema:", migrationError);
+      // Depending on severity, might want to throw or handle differently
+      throw migrationError; // Re-throw to stop initialization if schema is broken
+    }
+    // --- End Schema Migration ---
 
     db.exec(`
             CREATE TABLE IF NOT EXISTS blocked_agents (
@@ -55,7 +72,7 @@ export function initDb() {
 
     // Prepare statements for insertion (improves performance)
     const insertSiteStmt = db.prepare(
-      "INSERT OR IGNORE INTO sites (url) VALUES (?)"
+      "INSERT OR IGNORE INTO sites (url, rank) VALUES (?, ?)" // Added rank
     );
     const insertAgentStmt = db.prepare(
       "INSERT INTO blocked_agents (site_id, user_agent) VALUES (?, ?)"
@@ -63,13 +80,18 @@ export function initDb() {
     const findSiteIdStmt = db.prepare("SELECT id FROM sites WHERE url = ?");
 
     // Function to add a site and its blocked agents within a transaction
-    const addScanResult = db.transaction((siteUrl, blockedAgents) => {
+    // Added rank parameter
+    const addScanResult = db.transaction((siteUrl, blockedAgents, rank) => {
       const siteInfo = findSiteIdStmt.get(siteUrl);
       let siteId;
       if (!siteInfo) {
-        const info = insertSiteStmt.run(siteUrl);
+        // Pass rank to the insert statement
+        // Note: If the site already exists (IGNORE happens), the rank is NOT updated.
+        // This assumes rank is associated with the first time a site is added from a specific list.
+        const info = insertSiteStmt.run(siteUrl, rank);
         siteId = info.lastInsertRowid;
-        if (!siteId) {
+        if (!siteId && info.changes === 0) {
+          // Check changes property for IGNORE
           // If IGNORE happened, fetch the existing ID
           const existingSite = findSiteIdStmt.get(siteUrl);
           if (!existingSite) {
@@ -128,8 +150,30 @@ export function initDb() {
       return results;
     };
 
+    // Function to query the count of sites with no blocked agents
+    const querySitesWithNoBlockedAgentsCount = () => {
+      if (!db) {
+        console.error("Database not initialized for query.");
+        return { count: 0 }; // Return 0 count if DB not ready
+      }
+      const stmt = db.prepare(`
+          SELECT COUNT(s.id) as count
+          FROM sites s
+          LEFT JOIN blocked_agents ba ON s.id = ba.site_id
+          WHERE ba.site_id IS NULL
+      `);
+      const result = stmt.get(); // Expecting one row with the count
+      console.log(`Found ${result.count} sites with no blocked agents.`);
+      return result; // Returns object like { count: N }
+    };
+
     // Cache the functions and return them
-    dbFunctions = { db, addScanResult, queryBlockedAgentsReport };
+    dbFunctions = {
+      db,
+      addScanResult,
+      queryBlockedAgentsReport,
+      querySitesWithNoBlockedAgentsCount, // Add the new function here
+    };
     return dbFunctions;
   } catch (err) {
     console.error("Database initialization failed:", err);

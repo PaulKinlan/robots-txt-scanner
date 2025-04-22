@@ -8,6 +8,34 @@ import { initDb, resetDb } from "./db_manager.js"; // Import resetDb
 
 console.log("Robots.txt Analyzer CLI"); // Basic check
 
+// Define builder and handler for scan command
+const scanBuilder = (yargs) => {
+  return yargs
+    .option("list", {
+      alias: "l",
+      type: "string",
+      description: "Path to the CSV file containing domain names",
+      demandOption: true,
+    })
+    .option("max-rank", {
+      alias: "r",
+      describe: "Only scan sites up to this rank (inclusive)",
+      type: "number",
+      nargs: 1,
+    });
+};
+
+const scanHandler = async (argv) => {
+  const { list, maxRank } = argv;
+  const dbManager = await initDb();
+  try {
+    await scanSites(list, dbManager, maxRank);
+  } catch (error) {
+    console.error("Scan failed:", error.message);
+    process.exitCode = 1;
+  }
+};
+
 yargs(hideBin(process.argv))
   .command(
     "download-list",
@@ -27,25 +55,8 @@ yargs(hideBin(process.argv))
   .command(
     "scan",
     "Scan robots.txt files from a list of domains",
-    (yargs) => {
-      // Builder function for options
-      return yargs.option("list", {
-        alias: "l",
-        type: "string",
-        description: "Path to the CSV file containing domain names",
-        demandOption: true, // Make this option required
-      });
-    },
-    async (argv) => {
-      console.log(`Scanning sites from list: ${argv.list}`);
-      try {
-        await scanSites(argv.list);
-        console.log("Scan finished.");
-      } catch (error) {
-        console.error("Scan failed:", error.message);
-        process.exitCode = 1;
-      }
-    }
+    scanBuilder, // Use the builder variable
+    scanHandler // Use the handler variable
   )
   .command(
     "query",
@@ -55,19 +66,25 @@ yargs(hideBin(process.argv))
       return yargs.option("report", {
         alias: "r",
         type: "string",
-        description: 'Type of report to generate (e.g., "blocked-agents")',
-        choices: ["blocked-agents"], // Only allow this value for now
+        description:
+          'Type of report to generate (e.g., "blocked-agents", "no-blocked-agents")',
+        choices: ["blocked-agents", "no-blocked-agents"], // Add the new report type
         demandOption: true,
       });
     },
     async (argv) => {
-      if (argv.report === "blocked-agents") {
-        console.log("Querying blocked agents report...");
-        try {
-          const dbManager = initDb(); // Ensure DB is initialized
-          // We need the query function returned by initDb
-          if (!dbManager || !dbManager.queryBlockedAgentsReport) {
-            throw new Error("DB Manager not initialized correctly for query.");
+      console.log(`Querying report: ${argv.report}...`);
+      try {
+        const dbManager = initDb(); // Ensure DB is initialized
+        if (!dbManager) {
+          throw new Error("DB Manager failed to initialize.");
+        }
+
+        if (argv.report === "blocked-agents") {
+          if (!dbManager.queryBlockedAgentsReport) {
+            throw new Error(
+              "DB Manager not initialized correctly for 'blocked-agents' query."
+            );
           }
           const results = dbManager.queryBlockedAgentsReport();
           if (results && results.length > 0) {
@@ -83,12 +100,26 @@ yargs(hideBin(process.argv))
           } else {
             console.log("No blocked agents found in the database.");
           }
-        } catch (error) {
-          console.error("Query failed:", error.message);
+        } else if (argv.report === "no-blocked-agents") {
+          if (!dbManager.querySitesWithNoBlockedAgentsCount) {
+            throw new Error(
+              "DB Manager not initialized correctly for 'no-blocked-agents' query."
+            );
+          }
+          const result = dbManager.querySitesWithNoBlockedAgentsCount();
+          console.log("\n--- Sites With No Blocked Agents Report ---");
+          console.log(
+            `Total sites found with zero blocked agents: ${result.count}`
+          );
+          console.log("-------------------------------------------");
+        } else {
+          // This case should technically not be reachable due to 'choices' validation
+          console.error(`Unknown report type: ${argv.report}`);
           process.exitCode = 1;
         }
-      } else {
-        console.error(`Unknown report type: ${argv.report}`);
+      } catch (error) {
+        console.error("Query failed:", error.message);
+        process.exitCode = 1;
       }
     }
   )
