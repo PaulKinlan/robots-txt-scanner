@@ -1,0 +1,21 @@
+{
+  "name": "robots-txt",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "better-sqlite3": "^11.9.1",
+    "node-fetch": "^3.3.2",
+    "p-queue": "^8.1.0",
+    "robots-parser": "^3.0.1",
+    "yargs": "^17.7.2"
+  }
+}
