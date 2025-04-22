@@ -7,6 +7,8 @@ node_modules/
 
 # Downloaded zip file (temporary)
 *.zip
+*.csv
+
 
 # OS generated files
 .DS_Store
