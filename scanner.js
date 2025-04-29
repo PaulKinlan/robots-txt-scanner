@@ -8,7 +8,7 @@ import PQueue from "p-queue";
 import { initDb } from "./db_manager.js"; // Ensure .js extension
 
 // --- Configuration ---
-const CONCURRENCY = 50; // Number of concurrent requests
+const CONCURRENCY = 10; // Number of concurrent requests (Reduced from 50 to lower memory usage)
 const REQUEST_TIMEOUT = 10000; // 10 seconds timeout for fetch
 // Consider making this configurable or improving it
 const USER_AGENT =
@@ -143,6 +143,7 @@ export async function scanSites(listPath, dbManagerPassed, maxRank = null) {
 
   // Setup queue
   const queue = new PQueue({ concurrency: CONCURRENCY });
+  let isReadlinePaused = false; // Flag to track if readline is paused for backpressure
   let processedCount = 0;
   let successCount = 0;
   let errorCount = 0;
@@ -216,14 +217,30 @@ export async function scanSites(listPath, dbManagerPassed, maxRank = null) {
       }
     });
     // Removed the misplaced 'else if' from here
+    // --- Backpressure control ---
+    // Pause reading if the queue gets too large
+    if (queue.size >= CONCURRENCY * 2) {
+      // console.log(`Queue size ${queue.size}, pausing read stream...`); // Debug log
+      rl.pause();
+      isReadlinePaused = true; // Manually track paused state
+    }
+    // --- End Backpressure control ---
+  });
+
+  // Resume reading when the queue has space
+  queue.on("next", () => {
+    // Check our manual flag (to be added)
+    if (isReadlinePaused && queue.size < CONCURRENCY * 2) {
+      // console.log(`Queue size ${queue.size}, resuming read stream...`); // Debug log
+      rl.resume();
+      isReadlinePaused = false; // Update manual flag
+    }
   });
 
   // Wait for the file reading to complete
   await new Promise((resolve) => rl.on("close", resolve));
   console.log(
-    `Finished reading domain list (${lineCount} lines). Total tasks queued: ${
-      processedCount + queue.size
-    }. Waiting for queue to finish...`
+    `Finished reading domain list (${lineCount} lines). Waiting for queue to finish...` // Removed queue size log here as it's less relevant now
   );
 
   // Wait for the queue to finish processing all tasks

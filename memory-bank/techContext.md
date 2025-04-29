@@ -28,7 +28,7 @@
 ## Technical Constraints & Considerations
 
 - **Network Dependency:** Relies heavily on external network access to download the domain list and fetch `robots.txt` files. Network errors, timeouts, and server availability will impact operation.
-- **Rate Limiting:** High concurrency (`CONCURRENCY = 50` in `scanner.js`) might trigger rate limiting or temporary blocks from target web servers.
+- **Rate Limiting/Memory Usage:** High concurrency (`CONCURRENCY` was 50, now reduced to 10 in `scanner.js` to mitigate heap memory issues) might trigger rate limiting or temporary blocks from target web servers. Lower concurrency reduces memory pressure but slows the scan.
 - **`robots.txt` Variations:** The basic text parsing in `getBlockedAgents` might misinterpret complex or non-standard `robots.txt` files. It only checks for `User-agent:` followed by any `Disallow:`, not specific rules or `Allow:` directives.
 - **Storage:** The SQLite database (`robots_data.db`) will grow depending on the number of sites scanned and the number of unique blocked agents found. Could become large if scanning the full 1M list. The `sites` table includes `id`, `url` (for the robots.txt path), and `rank`.
 - **Error Handling:** Relies on basic try/catch blocks and console logging. More robust error handling or reporting could be added.

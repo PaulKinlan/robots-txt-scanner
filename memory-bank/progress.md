@@ -10,7 +10,7 @@
 ## What Works
 
 - **Domain List Download (`download-list` command):** Status: Fully Implemented. Fetches the zip, extracts the CSV, cleans up.
-- **URL Scanning (`scan` command):** Status: Fully Implemented. Reads CSV (format: `rank,url`), uses `p-queue` for concurrency, constructs `/robots.txt` path from URL origin, fetches `robots.txt`, performs basic text parsing for blocked agents, stores results (robots.txt URL, rank) in DB. Includes `--max-rank` option to filter input list.
+- **URL Scanning (`scan` command):** Status: Implemented (with recent memory fix). Reads CSV (format: `rank,url`), uses `p-queue` for concurrency (reduced to 10 from 50 to fix heap memory errors), constructs `/robots.txt` path from URL origin, fetches `robots.txt`, performs basic text parsing for blocked agents, stores results (robots.txt URL, rank) in DB. Includes `--max-rank` option to filter input list.
 - **Database Management (`db_manager.js`):** Status: Fully Implemented. Initializes SQLite DB, creates schema (`sites` table with `url` (for robots.txt) and `rank` column, `blocked_agents` table, index), handles insertions via transactions (including storing rank on initial site insert), provides query functions, handles DB closing.
 - **Blocked Agent Query (`query --report blocked-agents` command):** Status: Fully Implemented. Queries the database using `GROUP BY`/`COUNT(*)` and displays the results.
 - **Sites with No Blocked Agents Query (`query --report no-blocked-agents` command):** Status: Fully Implemented. Queries the database using a `LEFT JOIN` and `COUNT` to find sites with no entries in `blocked_agents`.
@@ -28,7 +28,8 @@
 
 ## Known Issues & Bugs
 
-- **Potential Rate Limiting:** Severity: Medium. High concurrency might get the tool blocked by servers. Status: Open (No mitigation implemented).
+- **Heap Memory Exhaustion during Scan:** Severity: High (Blocking). The application previously crashed with "JavaScript heap out of memory" during scans of large lists. This was caused by `readline` adding tasks to the `p-queue` much faster than they could be processed, leading to excessive memory use holding pending task functions. Status: **Fixed** (Implemented backpressure in `scanner.js` using `rl.pause()`/`rl.resume()` based on `queue.size`). Needs verification under load.
+- **Potential Rate Limiting:** Severity: Medium. Concurrency is currently set to 10. While the backpressure fix prevents memory issues, rate limiting by target servers is still possible. Status: Open (Concurrency is configurable but not dynamically adjusted).
 - **Basic `robots.txt` Parsing Limitations:** Severity: Medium. May misinterpret complex rules or fail on non-standard formats. Status: Open (By design for current scope).
 - **Noisy Logging:** Severity: Low. `better-sqlite3` verbose logging is enabled, might be too much for regular use. Status: Open.
 - **Error Handling Granularity:** Severity: Low. Some errors are caught generally; more specific handling could improve diagnostics. Status: Open.
